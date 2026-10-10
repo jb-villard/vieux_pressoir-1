@@ -15,7 +15,7 @@ class AccountInvoice(models.Model):
     @api.model
     def _get_invoice_key_cols(self):
         return [
-            'partner_id', 'user_id', 'move_type','currency_id',
+            'partner_id', 'invoice_user_id', 'move_type','currency_id',
             'journal_id', 'company_id', 'partner_bank_id',
         ]
 
@@ -23,57 +23,31 @@ class AccountInvoice(models.Model):
     def _get_invoice_line_key_cols(self):
         fields = [
             'name',  'discount', 'tax_ids', 'price_unit',
-            'product_id',  'analytic_account_id',
+            'product_id',  'analytic_distribution', 'display_type',
         ]
         for field in ['sale_line_ids']:
             if field in self.env['account.move.line']._fields:
                 fields.append(field)
         return fields
 
-    def _check_balanced(self):
-        ''' Assert the move is fully balanced debit = credit.
-        An error is raised if it's not the case.
-        '''
-        moves = self.filtered(lambda move: move.line_ids)
-        if not moves:
-            return
-
-        # /!\ As this method is called in create / write, we can't make the assumption the computed stored fields
-        # are already done. Then, this query MUST NOT depend of computed stored fields (e.g. balance).
-        # It happens as the ORM makes the create with the 'no_recompute' statement.
-        self.env['account.move.line'].flush(['debit', 'credit', 'move_id'])
-        self.env['account.move'].flush(['journal_id'])
-        self._cr.execute('''
-            SELECT line.move_id, ROUND(SUM(debit - credit), currency.decimal_places)
-            FROM account_move_line line
-            JOIN account_move move ON move.id = line.move_id
-            JOIN account_journal journal ON journal.id = move.journal_id
-            JOIN res_company company ON company.id = journal.company_id
-            JOIN res_currency currency ON currency.id = company.currency_id
-            WHERE line.move_id IN %s
-            GROUP BY line.move_id, currency.decimal_places
-            HAVING ROUND(SUM(debit - credit), currency.decimal_places) != 0.0;
-        ''', [tuple(self.ids)])
-
-        query_res = self._cr.fetchall()
-        
     @api.model
     def _get_first_invoice_fields(self, invoice):
         return {
             'invoice_origin': '%s' % (invoice.invoice_origin or '',),
             'partner_id': invoice.partner_id.id,
             'journal_id': invoice.journal_id.id,
-            'user_id': invoice.user_id.id,
+            'invoice_user_id': invoice.invoice_user_id.id,
             'currency_id': invoice.currency_id.id,
             'company_id': invoice.company_id.id,
             'move_type': invoice.move_type,
             'state': 'draft',
             'ref': '%s' % (invoice.ref or '',),
-            'name': '%s' % (invoice.name or '',),
             'fiscal_position_id': invoice.fiscal_position_id.id,
             'invoice_payment_term_id': invoice.invoice_payment_term_id.id,
             'invoice_line_ids': {},
             'partner_bank_id': invoice.partner_bank_id.id,
+            # only a real number is worth keeping
+            **({'name': invoice.name} if invoice.name and invoice.name != '/' else {}),
         }
 
     def do_merge(self, keep_references=True, date_invoice=False,currency_id=True,
@@ -92,10 +66,10 @@ class AccountInvoice(models.Model):
                     if field_val :
                         field_val = field_val.id
                 
-                elif (isinstance(field_val, list) or
-                      field == 'invoice_line_tax_ids' or
-                      field == 'sale_line_ids'):
-                    field_val = ((6, 0, tuple([v.id for v in field_val])),)
+                elif field == 'analytic_distribution':
+                    field_val = tuple(sorted((field_val or {}).items()))
+                elif field in ('tax_ids', 'sale_line_ids'):
+                    field_val = ((6, 0, tuple(field_val.ids)),)
                 list_key.append((field, field_val))
             list_key.sort()
             return tuple(list_key)
@@ -106,10 +80,10 @@ class AccountInvoice(models.Model):
                           if invoice.state == 'draft']
         required_element = [item for item, count in collections.Counter(draft_invoices).items() if count > 1]
         invoices = []
-        if self._context.get('merge_type') == 'exist_1':
+        if self.env.context.get('merge_type') == 'exist_1':
             for rec in draft_invoices:
                 if required_element:
-                    if rec == self._context.get('invoice_id') and rec == required_element[0]:
+                    if rec == self.env.context.get('invoice_id') and rec == required_element[0]:
                         pass
                     else:
                         invoices.append(rec)  
@@ -142,7 +116,7 @@ class AccountInvoice(models.Model):
                     origins.add(account_invoice.invoice_origin)
                     client_refs.add(account_invoice.ref)
                     if not keep_references:
-                        invoice_infos.pop('name')
+                        invoice_infos.pop('name', None)
 
                 else:
 
@@ -153,7 +127,7 @@ class AccountInvoice(models.Model):
                         invoice_infos['ref'] = (invoice_infos['ref'] or '') + ' ' + account_invoice.ref
                         client_refs.add(account_invoice.ref)
 
-                if self._context.get('merge_type') in ['exist_1','exist_2']:
+                if self.env.context.get('merge_type') in ['exist_1','exist_2']:
 
                     for invoice_line in account_invoice.invoice_line_ids:
                         line_key = make_key(
@@ -161,7 +135,7 @@ class AccountInvoice(models.Model):
 
                         o_line = invoice_infos['invoice_line_ids'].setdefault(line_key, {})
                         if o_line:
-                            if self._context.get('invoice_id') == account_invoice:
+                            if self.env.context.get('invoice_id') == account_invoice:
                                 pass
                             else:
                                 # merge the line with an existing line
@@ -204,7 +178,7 @@ class AccountInvoice(models.Model):
                     origins.add(account_invoice.invoice_origin)
                     client_refs.add(account_invoice.ref)
                     if not keep_references:
-                        invoice_infos.pop('name')
+                        invoice_infos.pop('name', None)
 
                 else:
 
@@ -231,7 +205,7 @@ class AccountInvoice(models.Model):
         allinvoices = []
         allnewinvoices = []
         invoices_info = {}
-        qty_prec = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        qty_prec = self.env['decimal.precision'].precision_get('Product Unit')
         for invoice_key, (invoice_data, old_ids) in new_invoices.items():
             # skip merges with only one invoice
             if len(old_ids) < 2:
@@ -240,9 +214,13 @@ class AccountInvoice(models.Model):
             # cleanup invoice line data
             for key, value in invoice_data['invoice_line_ids'].items():
                 value.update(dict(key))
+                value['analytic_distribution'] = dict(value['analytic_distribution']) or False
+                for field in ('tax_ids', 'sale_line_ids'):
+                    if field in value:
+                        value[field] = [(6, 0, list(value[field][0][2]))]
 
             if remove_empty_invoice_lines:
-                if self._context.get('merge_type') in ['exist_1','exist_2']:
+                if self.env.context.get('merge_type') in ['exist_1','exist_2']:
                     invoice_data['invoice_line_ids'] = [
                     (0, 0, value) for value in
                     invoice_data['invoice_line_ids'].values()]
@@ -258,17 +236,14 @@ class AccountInvoice(models.Model):
                     invoice_data['invoice_line_ids'].values()]
 
             if date_invoice:
-                invoice_data['date_invoice'] = date_invoice
+                invoice_data['invoice_date'] = date_invoice
                 
             invoice_merge = self.env['invoice.merge'].search([], order=' id desc', limit=1)
             if invoice_merge.types == 'new':
                 newinvoice = self.with_context(is_merge=True).create(invoice_data)
                 invoice_merge = self.env['invoice.merge'].search([], order=' id desc', limit=1)
-                total_amount = account_invoice.currency_id.compute(newinvoice.amount_untaxed, invoice_merge.currency_id)
-                final_amount = account_invoice.currency_id.compute(newinvoice.amount_total, invoice_merge.currency_id)
-                newinvoice.write({'currency_id': currency_id,
-                    'amount_untaxed':total_amount,
-                    'amount_total':final_amount})
+                if invoice_merge.currency and invoice_merge.currency_id:
+                    newinvoice.currency_id = invoice_merge.currency_id
                 invoices_info.update({newinvoice.id: old_ids})
                 allinvoices.append(newinvoice.id)
                 allnewinvoices.append(newinvoice)
@@ -278,12 +253,11 @@ class AccountInvoice(models.Model):
             if invoice_merge.types == 'exist_1':
                 merge_with_id = self.env['account.move'].search([('id', '=', invoice_list[len(invoice_list)-1])])
                 merge_with_id.invoice_line_ids.unlink()
-                newinvoice = merge_with_id.write(invoice_data)
-                total_amount = account_invoice.currency_id.compute(merge_with_id.amount_untaxed, invoice_merge.currency_id)
-                final_amount = account_invoice.currency_id.compute(merge_with_id.amount_total, invoice_merge.currency_id)
-                merge_with_id.write({'currency_id': currency_id,
-                    'amount_untaxed':total_amount,
-                    'amount_total':final_amount})
+                merge_with_id.write({
+                    key: value for key, value in invoice_data.items()
+                    if key in ('invoice_origin', 'ref', 'invoice_date', 'invoice_line_ids')})
+                if invoice_merge.currency and invoice_merge.currency_id:
+                    merge_with_id.currency_id = invoice_merge.currency_id
                 invoices_info.update({merge_with_id.id: old_ids})
                 allinvoices.append(merge_with_id.id)
                 allnewinvoices.append(merge_with_id)
@@ -305,10 +279,10 @@ class AccountInvoice(models.Model):
                     if field_val :
                         field_val = field_val.id
 
-                elif (isinstance(field_val, list) or
-                      field == 'invoice_line_tax_ids' or
-                      field == 'sale_line_ids'):
-                    field_val = ((6, 0, tuple([v.id for v in field_val])),)
+                elif field == 'analytic_distribution':
+                    field_val = tuple(sorted((field_val or {}).items()))
+                elif field in ('tax_ids', 'sale_line_ids'):
+                    field_val = ((6, 0, tuple(field_val.ids)),)
                 list_key.append((field, field_val))
             list_key.sort()
             return tuple(list_key)
@@ -319,11 +293,11 @@ class AccountInvoice(models.Model):
                           if invoice.state == 'draft']
         invoices = []
         required_element = [item for item, count in collections.Counter(draft_invoices).items() if count > 1]
-        if self._context.get('merge_type') == 'exist_2':
+        if self.env.context.get('merge_type') == 'exist_2':
             
             for rec in draft_invoices:
                 if required_element:
-                    if rec == self._context.get('invoice_id') and rec == required_element[0]:
+                    if rec == self.env.context.get('invoice_id') and rec == required_element[0]:
                         pass
                     else:
                         invoices.append(rec)
@@ -355,7 +329,7 @@ class AccountInvoice(models.Model):
                     origins.add(account_invoice.invoice_origin)
                     client_refs.add(account_invoice.ref)
                     if not keep_references:
-                        invoice_infos.pop('name')
+                        invoice_infos.pop('name', None)
 
                 else:
 
@@ -366,7 +340,7 @@ class AccountInvoice(models.Model):
                         invoice_infos['ref'] = (invoice_infos['ref'] or '') + ' ' + account_invoice.ref
                         client_refs.add(account_invoice.ref)
 
-                if self._context.get('merge_type') in ['exist_1','exist_2']:
+                if self.env.context.get('merge_type') in ['exist_1','exist_2']:
 
                     for invoice_line in account_invoice.invoice_line_ids:
                         line_key = make_key(
@@ -374,7 +348,7 @@ class AccountInvoice(models.Model):
 
                         o_line = invoice_infos['invoice_line_ids'].setdefault(line_key, {})
                         if o_line:
-                            if self._context.get('invoice_id') == account_invoice:
+                            if self.env.context.get('invoice_id') == account_invoice:
                                 pass
                             else:
                                 # merge the line with an existing line
@@ -420,7 +394,7 @@ class AccountInvoice(models.Model):
                     origins.add(account_invoice.invoice_origin)
                     client_refs.add(account_invoice.ref)
                     if not keep_references:
-                        invoice_infos.pop('name')
+                        invoice_infos.pop('name', None)
                 else:
                     if account_invoice.invoice_origin and account_invoice.invoice_origin not in origins:
                         invoice_infos['invoice_origin'] = (invoice_infos['invoice_origin'] or '') + ' ' + account_invoice.invoice_origin
@@ -429,7 +403,7 @@ class AccountInvoice(models.Model):
                         invoice_infos['ref'] = (invoice_infos['ref'] or '') + ' ' + account_invoice.ref
                         client_refs.add(account_invoice.ref)
 
-                if self._context.get('merge_type') in ['exist_1','exist_2']:
+                if self.env.context.get('merge_type') in ['exist_1','exist_2']:
 
                     for invoice_line in account_invoice.invoice_line_ids:
                         line_key = make_key(
@@ -437,7 +411,7 @@ class AccountInvoice(models.Model):
 
                         o_line = invoice_infos['invoice_line_ids'].setdefault(line_key, {})
                         if o_line:
-                            if self._context.get('active_id') == account_invoice.id:
+                            if self.env.context.get('active_id') == account_invoice.id:
                                 pass
                             else:
                                 # merge the line with an existing line
@@ -462,7 +436,7 @@ class AccountInvoice(models.Model):
         allinvoices = []
         allnewinvoices = []
         invoices_info = {}
-        qty_prec = self.env['decimal.precision'].precision_get('Product Unit of Measure')
+        qty_prec = self.env['decimal.precision'].precision_get('Product Unit')
         for invoice_key, (invoice_data, old_ids) in new_invoices.items():
             # skip merges with only one invoice
             if len(old_ids) < 2:
@@ -471,9 +445,13 @@ class AccountInvoice(models.Model):
             # cleanup invoice line data
             for key, value in invoice_data['invoice_line_ids'].items():
                 value.update(dict(key))
+                value['analytic_distribution'] = dict(value['analytic_distribution']) or False
+                for field in ('tax_ids', 'sale_line_ids'):
+                    if field in value:
+                        value[field] = [(6, 0, list(value[field][0][2]))]
 
             if remove_empty_invoice_lines:
-                if self._context.get('merge_type') in ['exist_1','exist_2']:
+                if self.env.context.get('merge_type') in ['exist_1','exist_2']:
                     invoice_data['invoice_line_ids'] = [
                     (0, 0, value) for value in
                     invoice_data['invoice_line_ids'].values()]
@@ -490,17 +468,14 @@ class AccountInvoice(models.Model):
                     invoice_data['invoice_line_ids'].values()]
 
             if date_invoice:
-                invoice_data['date_invoice'] = date_invoice
+                invoice_data['invoice_date'] = date_invoice
 
             invoice_merge = self.env['invoice.merge'].search([], order=' id desc', limit=1)
             if invoice_merge.types == 'exist':
                 newinvoice = self.with_context(is_merge=True).create(invoice_data)
                 invoice_merge = self.env['invoice.merge'].search([], order=' id desc', limit=1)
-                total_amount = account_invoice.currency_id.compute(newinvoice.amount_untaxed, invoice_merge.currency_id)
-                final_amount = account_invoice.currency_id.compute(newinvoice.amount_total, invoice_merge.currency_id)
-                newinvoice.write({'currency_id': invoice_merge.currency_id.id,
-                    'amount_untaxed':total_amount,
-                    'amount_total':final_amount})
+                if invoice_merge.currency and invoice_merge.currency_id:
+                    newinvoice.currency_id = invoice_merge.currency_id
                 invoices_info.update({newinvoice.id: old_ids})
                 allinvoices.append(newinvoice.id)
                 allnewinvoices.append(newinvoice)
@@ -510,12 +485,11 @@ class AccountInvoice(models.Model):
             if invoice_merge.types == 'exist_2':
                 merge_with_id = self.env['account.move'].search([('id', '=', invoice_list[len(invoice_list)-1])])
                 merge_with_id.invoice_line_ids.unlink()
-                newinvoice = merge_with_id.write(invoice_data)
-                total_amount = account_invoice.currency_id.compute(merge_with_id.amount_untaxed, invoice_merge.currency_id)
-                final_amount = account_invoice.currency_id.compute(merge_with_id.amount_total, invoice_merge.currency_id)
-                merge_with_id.write({'currency_id': invoice_merge.currency_id.id,
-                    'amount_untaxed':total_amount,
-                    'amount_total':final_amount})
+                merge_with_id.write({
+                    key: value for key, value in invoice_data.items()
+                    if key in ('invoice_origin', 'ref', 'invoice_date', 'invoice_line_ids')})
+                if invoice_merge.currency and invoice_merge.currency_id:
+                    merge_with_id.currency_id = invoice_merge.currency_id
                 invoices_info.update({merge_with_id.id: old_ids})
                 allinvoices.append(merge_with_id.id)
                 allnewinvoices.append(merge_with_id)

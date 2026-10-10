@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Part of BrowseInfo. See LICENSE file for full copyright and licensing details.
 
-from odoo import fields, models, api, exceptions,_
+from odoo import fields, models, api, _
 from odoo.exceptions import UserError
 
 
@@ -15,17 +15,19 @@ class InvoiceMerge(models.TransientModel):
                               ('exist_2','Merge Invoices/Bills on existing selected Invoice/Bill and delete others')],
                               'Merge Option',default='new', required=True)
     currency = fields.Boolean(string='Merge multi currency invoice')
-    currency_id = fields.Many2one('res.currency', string='Select Currency',default=lambda self: self.env.user.company_id.currency_id)
+    currency_id = fields.Many2one('res.currency', string='Select Currency',default=lambda self: self.env.company.currency_id)
     keep_references = fields.Boolean('Keep references from original invoices', default=True)
-    invoice_id = fields.Many2one('account.move', string='Merge with',domain=[('state', 'not in', ('cancel','paid','open','posted'))])
+    invoice_id = fields.Many2one('account.move', string='Merge with',domain=[('state', '=', 'draft')])
     date_invoice = fields.Date('Invoice Date')
     account_id = fields.Many2one('account.move', string='Invoice')
-    
+
     @api.model
-    def default_get(self,fields):
-        res = super(InvoiceMerge, self).default_get(fields)
-        invoice_obj = self.env['account.move'].browse(self._context.get('active_ids')) 
-        res['account_id'] = invoice_obj[0].id
+    def default_get(self, fields):
+        res = super().default_get(fields)
+        self._dirty_check()
+        active_ids = self.env.context.get('active_ids')
+        if self.env.context.get('active_model') == 'account.move' and active_ids:
+            res['account_id'] = active_ids[0]
         return res
 
     @api.model
@@ -61,85 +63,39 @@ class InvoiceMerge(models.TransientModel):
                         _('Not all invoices are at the same journal!'))
         return {}
 
-    @api.model
-    def fields_view_get(self, view_id=None, view_type='form', toolbar=False,submenu=False):
-
-        res = super(InvoiceMerge, self).fields_view_get(
-            view_id=view_id, view_type=view_type, toolbar=toolbar,
-            submenu=False)
-        self._dirty_check()
-        return res
-
     def merge_invoices(self):
         self.ensure_one()
-        context = self._context.copy()
+        self._dirty_check()
+        context = dict(self.env.context)
+        inv_obj = self.env['account.move']
+        ids = list(self.env.context.get('active_ids', []))
+
         if self.types == 'new':
-            inv_obj = self.env['account.move']
-            aw_obj = self.env['ir.actions.act_window']
-            ids = self.env.context.get('active_ids', [])
             invoices = inv_obj.browse(ids)
-            allinvoices = invoices.do_merge(keep_references=self.keep_references,
-                                            currency_id=self.currency_id.id or '',
-                                                date_invoice=self.date_invoice)
-            xid = {
-                'out_invoice': 'view_invoice_tree',
-                'out_refund': 'view_invoice_tree',
-                'in_invoice': 'view_invoice_tree',
-                'in_refund': 'view_invoice_tree',
-            }[invoices[0].move_type]
-            action = aw_obj._for_xml_id('account.action_move_line_form')
+            invoices.do_merge(keep_references=self.keep_references,
+                              currency_id=self.currency_id.id or '',
+                              date_invoice=self.date_invoice)
 
         if self.types == 'exist':
-            inv_obj = self.env['account.move']
-            aw_obj = self.env['ir.actions.act_window']
-            ids = self.env.context.get('active_ids', [])
             invoices = inv_obj.browse(ids)
-            allinvoices = invoices.do_merge_del(keep_references=self.keep_references,
-                                                currency_id=self.currency_id.id or '',
-                                                date_invoice=self.date_invoice)
-            xid = {
-                 'out_invoice': 'view_invoice_tree',
-                 'out_refund': 'view_invoice_tree',
-                 'in_invoice': 'view_invoice_tree',
-                 'in_refund': 'view_invoice_tree',
-            }[invoices[0].move_type]
-            action = aw_obj._for_xml_id('account.action_move_line_form')
+            invoices.do_merge_del(keep_references=self.keep_references,
+                                  currency_id=self.currency_id.id or '',
+                                  date_invoice=self.date_invoice)
             invoices.unlink()
 
         if self.types == 'exist_1':
             context.update({'merge_type': 'exist_1','invoice_id': self.invoice_id})
-            inv_obj = self.env['account.move']
-            aw_obj = self.env['ir.actions.act_window']
-            ids = self.env.context.get('active_ids', [])
             ids.append(self.invoice_id.id)
             invoices = inv_obj.browse(ids)
-            allinvoices = invoices.with_context(context).do_merge(keep_references=self.keep_references,
-                                            currency_id=self.currency_id.id or '',
-                                                   date_invoice=self.date_invoice)
-            xid = {
-                 'out_invoice': 'view_invoice_tree',
-                 'out_refund': 'view_invoice_tree',
-                 'in_invoice': 'view_invoice_tree',
-                 'in_refund': 'view_invoice_tree',
-            }[invoices[0].move_type]
-            action = aw_obj._for_xml_id('account.action_move_line_form')
+            invoices.with_context(context).do_merge(keep_references=self.keep_references,
+                                                    currency_id=self.currency_id.id or '',
+                                                    date_invoice=self.date_invoice)
 
         if self.types == 'exist_2':
             context.update({'merge_type': 'exist_2','invoice_id': self.invoice_id})
-            inv_obj = self.env['account.move']
-            aw_obj = self.env['ir.actions.act_window']
-            ids = self.env.context.get('active_ids', [])
             ids.append(self.invoice_id.id)
             invoices = inv_obj.browse(ids)
             cancel_invoice = self.env['account.move'].search([('id', 'in', ids),('id','!=',ids[len(ids)-1])])
-            allinvoices = invoices.with_context(context).do_merge_del(keep_references=self.keep_references,
-                                                date_invoice=self.date_invoice)
-            xid = {
-                 'out_invoice': 'view_invoice_tree',
-                 'out_refund': 'view_invoice_tree',
-                 'in_invoice': 'view_invoice_tree',
-                 'in_refund': 'view_invoice_tree',
-            }[invoices[0].move_type]
-            action = aw_obj._for_xml_id('account.action_move_line_form')
+            invoices.with_context(context).do_merge_del(keep_references=self.keep_references,
+                                                        date_invoice=self.date_invoice)
             cancel_invoice.unlink()
-

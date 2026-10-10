@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright (c) 2016-Present Webkul Software Pvt. Ltd. (<https://webkul.com/>) -->
+<!-- See LICENSE file for full copyright and licensing details. -->
+<!-- License URL : <https://store.webkul.com/license.html/> -->
+
+<templates id="template" xml:space="preserve">
+
+    <t t-name="pos_stocks.ProductScreen" t-inherit="point_of_sale.ProductScreen" t-inherit-mode="extension">
+        <xpath expr="//ProductCard" position="inside">
+            <t t-set-slot="quantityButtons">
+                <t t-if="pos.config.wk_display_stock and pos.wkTemplateQtyStr(product)">
+                    <span class="qty-tag" t-esc="pos.wkTemplateQtyStr(product)"/>
+                    <span t-if="pos.wkTemplateLocation(product)" class="loc-tag" t-esc="pos.wkTemplateLocation(product)"/>
+                </t>
+            </t>
+        </xpath>
+    </t>
+
+</templates>

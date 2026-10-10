@@ -3,7 +3,8 @@
 
 {
     'name': 'Merge Invoices(Customer Invoice/Vendor Bills) Odoo/OpenERP',
-    'version': '14.0.0.1',
+    'version': '19.0.0.1',
+    'license': 'OPL-1',
     'category': 'Accounting',
     'summary': 'Apps for merge invoices Merge customer invoices merge vendor bills merge supplier invoice merge invoice data invoice Merger customer invoice Merge vendor bill merge supplier invoice merge vendor bill merge invoice merge',
     'description': """

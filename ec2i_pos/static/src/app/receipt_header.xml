@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!-- En-tête du ticket : nom de la société et adresse du magasin à la place du logo -->
+    <t t-name="ec2i_pos.ReceiptHeader" t-inherit="point_of_sale.ReceiptHeader" t-inherit-mode="extension">
+        <xpath expr="//img[hasclass('pos-receipt-logo')]" position="replace">
+            <h2 class="pos-receipt-center-align text-center" t-esc="order.company.name"/>
+            <div class="pos-receipt-contact">
+                <div>81, Avenue de la libération</div>
+                <div>42 120 LE COTEAU</div>
+                <div>Mail : vieuxpressoirlecoteau@orange.fr</div>
+            </div>
+        </xpath>
+    </t>
+
+</templates>
