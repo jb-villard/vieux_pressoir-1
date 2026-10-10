@@ -30,3 +30,12 @@
     padding: 2px 5px;
     border-radius: 2px;
 }
+
+/* no image: keep the product name below the tags */
+.product:has(.qty-tag):not(:has(.product-img)) .product-content{
+    padding-top: 20px;
+}
+
+.product:has(.loc-tag):not(:has(.product-img)) .product-content{
+    padding-top: 40px;
+}
