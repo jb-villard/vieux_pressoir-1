@@ -4,26 +4,17 @@
         <field name="model">invoice.merge</field>
         <field name="arch" type="xml">
             <form string="Merge Partner Invoice">
-                <group>
-                    <separator
-                        string=""
-                        colspan="4" />
-                    <p>
-
-                    </p>
-                </group>
                 <group name="options">
                     <field name="types" widget="radio"/>
                     <field name="keep_references" invisible="1"/>
                     <field name="currency"/>
-                    <field name="currency_id" attrs="{'invisible': [('currency', '=', False)]}"/>
-                    <field name="invoice_id"  attrs="{'invisible': [('types', 'in', ['new','exist'])],'required': [('types', 'in', ['exist_1','exist_2'])]}"/>
+                    <field name="currency_id" invisible="not currency"/>
+                    <field name="invoice_id" invisible="types in ('new', 'exist')" required="types in ('exist_1', 'exist_2')"/>
                     <field name="account_id" invisible="1"/>
                 </group>
                 <footer>
                     <button name="merge_invoices" string="Merge Invoices"
                         type="object" class="oe_highlight" />
-                    or
                     <button string="Cancel" class="oe_link"
                         special="cancel" />
                 </footer>
@@ -31,14 +22,13 @@
         </field>
     </record>
 
-    <act_window
-            name="Merge Invoice"
-            id="action_view_invoice_merge"
-            res_model="invoice.merge"
-            binding_model="account.move"
-            binding_views="list"
-            view_mode="form"
-            target="new"
-           />
+    <record id="action_view_invoice_merge" model="ir.actions.act_window">
+        <field name="name">Merge Invoice</field>
+        <field name="res_model">invoice.merge</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="account.model_account_move"/>
+        <field name="binding_view_types">list</field>
+    </record>
 
 </odoo>

@@ -1,0 +1,9 @@
+// Carte produit sans image : le nom s'affiche en entier, la carte s'agrandit au besoin
+.rightpane .product .product-name.no-image {
+    display: block !important;
+    overflow: visible !important;
+    -webkit-line-clamp: unset;
+    aspect-ratio: auto;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+}

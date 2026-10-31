@@ -13,16 +13,18 @@
     'website': "http://www.adquat.com",
 
     # Categories can be used to filter modules in modules listing
-    # Check https://github.com/odoo/odoo/blob/13.0/odoo/addons/base/data/ir_module_category_data.xml
+    # Check https://github.com/odoo/odoo/blob/19.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
     'category': 'Invoicing',
-    'version': '0.1',
+    'version': '19.0.0.1',
+    'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
-    'depends': ['account',  ],
+    'depends': ['account_accountant'],
 
     # always loaded
     'data': [
+        'views/bank_rec_widget_views.xml',
     ],
     # only loaded in demonstration mode
     'demo': [

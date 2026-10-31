@@ -6,6 +6,7 @@
     position: absolute;
     top: 2px;
     left: 2px;
+    z-index: 1;
     width: auto;
     vertical-align: top;
     color: #FFF;
@@ -20,6 +21,7 @@
     position: absolute;
     top: 22px;
     left: 2px;
+    z-index: 1;
     width: auto;
     vertical-align: top;
     color: #FFF;
@@ -27,4 +29,13 @@
     background: none repeat scroll 0% 0% #900C3F;
     padding: 2px 5px;
     border-radius: 2px;
+}
+
+/* no image: keep the product name below the tags */
+.product:has(.qty-tag):not(:has(.product-img)) .product-content{
+    padding-top: 20px;
+}
+
+.product:has(.loc-tag):not(:has(.product-img)) .product-content{
+    padding-top: 40px;
 }

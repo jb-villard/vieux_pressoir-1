@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Rapprochement bancaire : écritures proposées triées par échéance décroissante -->
+    <record id="view_account_move_line_list_bank_rec_widget" model="ir.ui.view">
+        <field name="name">account.move.line.list.bank_rec_widget.adquat</field>
+        <field name="model">account.move.line</field>
+        <field name="inherit_id" ref="account_accountant.view_account_move_line_list_bank_rec_widget"/>
+        <field name="arch" type="xml">
+            <list position="attributes">
+                <attribute name="default_order">date_maturity desc, id</attribute>
+            </list>
+        </field>
+    </record>
+</odoo>
