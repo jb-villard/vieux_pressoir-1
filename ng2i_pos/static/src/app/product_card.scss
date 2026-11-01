@@ -7,3 +7,15 @@
     overflow-wrap: anywhere;
     hyphens: auto;
 }
+
+// Prix de vente en bas de la carte, sous le nom
+.rightpane .product .product-content:has(.ng2i-price) {
+    flex-direction: column;
+    width: 100%;
+}
+
+.ng2i-price {
+    margin-top: auto;
+    text-align: center;
+    font-weight: bold;
+}
