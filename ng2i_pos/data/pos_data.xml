@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- Odoo ne charge que les 100 clients les plus actifs : la recherche en caisse ne trouverait pas les autres -->
+    <function model="ir.config_parameter" name="set_param">
+        <value>point_of_sale.limited_customer_count</value>
+        <value>5000</value>
+    </function>
+
+    <!-- La caisse garde ses données dans le navigateur : force un rechargement complet sur chaque poste -->
+    <function model="pos.config" name="_compute_local_data_integrity">
+        <value model="pos.config" search="[]"/>
+    </function>
+
+</odoo>
