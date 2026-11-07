@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Fiche produit : millésime, volume et taux d'alcool (champs Studio du client).
+         Vue créée par code, voir product.template._ng2i_load_cave_form_view -->
+    <function model="product.template" name="_ng2i_load_cave_form_view"/>
+
+</odoo>

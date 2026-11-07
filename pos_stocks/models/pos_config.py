@@ -75,16 +75,3 @@ class PosConfig(models.Model):
                 'location': " + ".join(location_names[product.id]),
             }
         return result
-
-
-class ProductProduct(models.Model):
-    _inherit = 'product.product'
-
-    def _compute_display_name(self):
-        super()._compute_display_name()
-        # x_volume_L is a Studio field, it only exists on the customer database
-        if 'x_volume_L' not in self._fields:
-            return
-        for record in self:
-            if record.x_volume_L and record.display_name:
-                record.display_name = "%s [%s L]" % (record.display_name, record.x_volume_L)
