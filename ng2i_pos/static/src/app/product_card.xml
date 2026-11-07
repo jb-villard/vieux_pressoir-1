@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates id="template" xml:space="preserve">
 
-    <!-- Prix de vente sur les cartes de l'écran de vente, pas sur celles des menus -->
+    <!-- Prix de vente sur les cartes de l'écran de vente, pas sur celles des menus :
+         pastille jaune en haut à droite de la carte -->
     <t t-name="ng2i_pos.ProductCard" t-inherit="point_of_sale.ProductCard" t-inherit-mode="extension">
-        <xpath expr="//div[hasclass('product-name')]" position="after">
-            <span t-if="props.priceLabel" class="ng2i-price" t-esc="props.priceLabel"/>
+        <xpath expr="//div[hasclass('product-content')]" position="after">
+            <span t-if="props.priceLabel"
+                class="ng2i-price position-absolute z-2 rounded text-nowrap pe-none"
+                t-esc="props.priceLabel"/>
         </xpath>
     </t>
 

@@ -8,14 +8,28 @@
     hyphens: auto;
 }
 
-// Prix de vente en bas de la carte, sous le nom
-.rightpane .product .product-content:has(.ng2i-price) {
-    flex-direction: column;
-    width: 100%;
-}
+// Prix de vente : pastille jaune en haut à droite de la carte,
+// sur la même ligne que l'étiquette de stock de pos_stocks (haut gauche, 2px)
+// et au-dessus de l'étiquette d'emplacement (22px du haut) : hauteur 19px au plus.
+// Au premier plan (z-2) : un stock très long (vrac en litres) passe dessous, le prix reste lisible.
+$ng2i-price-bg: #ffd500;
 
 .ng2i-price {
-    margin-top: auto;
-    text-align: center;
+    top: 2px;
+    right: 2px;
+    padding: 2px 5px;
+    background-color: $ng2i-price-bg;
+    color: #000;
     font-weight: bold;
+    line-height: 15px;
+}
+
+// Carte sans image : le nom passe sous la pastille.
+// L'étiquette d'emplacement de pos_stocks demande 40px.
+.rightpane .product:has(.ng2i-price):not(:has(.product-img)) .product-content {
+    padding-top: 20px;
+}
+
+.rightpane .product:has(.ng2i-price):has(.loc-tag):not(:has(.product-img)) .product-content {
+    padding-top: 40px;
 }

@@ -17,7 +17,7 @@
     # Check https://github.com/odoo/odoo/blob/19.0/odoo/addons/base/data/ir_module_category_data.xml
     # for the full list
     'category': '',
-    'version': '19.0.0.6',
+    'version': '19.0.0.8',
     'license': 'LGPL-3',
 
     # any module necessary for this one to work correctly
@@ -26,6 +26,7 @@
     # always loaded
     'data': [
         'data/pos_data.xml',
+        'data/product_views.xml',
         'views/stockMove.xml',
     ],
 
